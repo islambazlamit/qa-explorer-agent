@@ -40,7 +40,7 @@ Most test tools check what you told them to check. QA Explorer starts from what 
 Copy the agent and the skills into your Claude folder.
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/qa-explorer-agent.git
+git clone https://github.com/islambazlamit/qa-explorer-agent.git
 cd qa-explorer-agent
 mkdir -p ~/.claude/agents ~/.claude/skills
 cp agents/qa-explorer.md ~/.claude/agents/
