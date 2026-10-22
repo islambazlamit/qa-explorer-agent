@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Buggy Notes</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+  nav a { margin-right: 1rem; }
+  .err { color: #b00020; }
+  .ok { color: #0a7a2f; }
+  li { margin: 0.4rem 0; }
+  input { margin: 0 0.4rem 0.4rem 0; }
+</style>
+</head>
+<body>
+<h1>Buggy Notes</h1>
+<p>A small practice app for testing QA agents. It is not a real product. All data stays in this browser.</p>
+<p><label>Role
+  <select id="role">
+    <option value="user">User</option>
+    <option value="admin">Admin</option>
+  </select>
+</label></p>
+<nav>
+  <a href="#/">Home</a>
+  <a href="#/notes">Notes</a>
+  <a href="#/settings">Settings</a>
+  <a href="#/admin">Admin</a>
+</nav>
+<main id="app"></main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+let notes = JSON.parse(localStorage.getItem("notes") || "[]");
+let state = { q: "", edit: null };
+let nextId = notes.reduce((m, n) => Math.max(m, n.id), 0) + 1;
+
+// Harmless console warning (false positive trap)
+console.warn("analytics.js was blocked by the browser");
+
+// Seeded defect D1: titles are cut at "&" when saved to storage, so they change after a reload.
+function persist() {
+  localStorage.setItem("notes", JSON.stringify(notes.map((n) => ({ ...n, title: n.title.split("&")[0] }))));
+}
+
+function home() {
+  return '<h2>Home</h2><p>Welcome. Use Notes to add and manage notes.</p>' +
+    // False positive trap F2: intentionally disabled button with an explanation
+    '<button disabled title="Available on the Pro plan">Export</button>';
+}
+
+function notesView() {
+  return '<h2>Notes</h2>' +
+    '<form id="f"><label>Title <input id="t"></label>' +
+    '<label>Priority (1 to 5) <input id="p" type="number" value="3"></label>' +
+    '<button type="submit">Add note</button> <span id="e" class="err"></span></form>' +
+    '<p><label>Search <input id="q" value="' + esc(state.q) + '"></label></p>' +
+    '<ul id="list"></ul>' +
+    '<button id="reset" type="button">Reset demo data</button>';
+}
+
+function listHtml() {
+  // Seeded defect D2: search is case sensitive
+  const shown = state.q ? notes.filter((n) => n.title.includes(state.q)) : notes;
+  if (!shown.length) return "<li>No notes yet</li>";
+  return shown.map((n, i) => {
+    if (state.edit === n.id) {
+      return '<li><input id="et" value="' + esc(n.title) + '"> <button data-a="save" data-id="' + n.id + '">Save</button></li>';
+    }
+    return "<li>" + esc(n.title) + " (priority " + esc(n.p) + ') ' +
+      '<button data-a="edit" data-id="' + n.id + '">Edit</button> ' +
+      '<button data-a="del" data-i="' + i + '">Delete</button></li>';
+  }).join("");
+}
+
+function settingsView() {
+  const name = localStorage.getItem("displayName") || "";
+  return '<h2>Settings</h2><form id="s"><label>Display name <input id="dn" value="' + esc(name) + '"></label>' +
+    '<button type="submit">Save</button> <span id="m"></span></form>';
+}
+
+function adminView() {
+  // Seeded defect D5: the user list is shown to every role, including "User"
+  return '<h2>Admin</h2><p>Registered users: alice, bob, carol</p>';
+}
+
+function view() {
+  const h = location.hash || "#/";
+  let html;
+  if (h === "#/") html = home();
+  else if (h === "#/notes") html = notesView();
+  else if (h === "#/settings") html = settingsView();
+  else if (h === "#/admin") html = adminView();
+  else html = '<h2>Not found</h2><p>This page does not exist. <a href="#/">Go home</a></p>';
+  $("#app").innerHTML = html;
+  if (h === "#/notes") $("#list").innerHTML = listHtml();
+}
+
+document.addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (e.target.id === "f") {
+    const title = $("#t").value;
+    const msg = $("#e");
+    if (!title.trim()) { msg.textContent = "Title is required"; return; }
+    // False positive trap F3: documented validation message
+    if (title.length > 50) { msg.textContent = "Title must be 50 characters or less"; return; }
+    // Seeded defect D3: priority is not validated (negative and huge values accepted)
+    notes.push({ id: nextId++, title, p: $("#p").value });
+    persist();
+    msg.textContent = "";
+    $("#t").value = "";
+    $("#list").innerHTML = listHtml();
+  }
+  if (e.target.id === "s") {
+    const v = $("#dn").value;
+    if (!v.trim()) { $("#m").className = "err"; $("#m").textContent = "Display name is required"; return; }
+    localStorage.setItem("displayName", v);
+    $("#m").className = "ok";
+    $("#m").textContent = "Saved";
+  }
+});
+
+document.addEventListener("input", (e) => {
+  if (e.target.id === "q") { state.q = e.target.value; $("#list").innerHTML = listHtml(); }
+});
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.id === "reset") { notes = []; localStorage.removeItem("notes"); $("#list").innerHTML = listHtml(); return; }
+  const a = b.dataset.a;
+  if (a === "edit") { state.edit = Number(b.dataset.id); $("#list").innerHTML = listHtml(); }
+  if (a === "save") {
+    // Seeded defect D6: an empty title is accepted when editing
+    notes.find((n) => n.id === Number(b.dataset.id)).title = $("#et").value;
+    state.edit = null;
+    persist();
+    $("#list").innerHTML = listHtml();
+  }
+  if (a === "del") {
+    // Seeded defect D4: with a search filter on, the position in the filtered list is used on the full list
+    notes.splice(Number(b.dataset.i), 1);
+    persist();
+    $("#list").innerHTML = listHtml();
+  }
+});
+
+window.addEventListener("hashchange", view);
+view();
+</script>
+</body>
+</html>

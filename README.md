@@ -1,43 +1,62 @@
 # QA Explorer
 
-**An AI tester that uses your website or app like a real person, and proves it covered everything.**
+**An AI tester that explores your website or app like a real user, and tells you exactly what it covered and what it did not.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ![Works with Claude Code](https://img.shields.io/badge/works%20with-Claude%20Code-6b4fbb)
+![Version](https://img.shields.io/badge/agent-v2.0.0-blue)
 
-QA Explorer is an agent for Claude Code (and any tool that can load a markdown agent file). Give it a URL or an app, and it will click the buttons, fill the forms, create things, edit them, delete them, go back, refresh, and break things the way real users do. When it finishes, you get a report with bugs, evidence and a coverage count.
+QA Explorer is an agent for Claude Code (and any tool that can load a markdown agent file). Give it a URL or an iOS simulator app, and it will click, type, create, edit, delete, go back and refresh the way real users do. It keeps an auditable ledger of the scope it discovered and agreed on, verifies each bug, and reports coverage gaps openly. You get a report with bugs, evidence and numbers you can check.
 
-> **Warning:** This agent performs real actions in the system you test. Use it only on systems you own or have written permission to test, and start on a test copy. I am not responsible for any misuse or any problem that comes from using it. Read the [DISCLAIMER](DISCLAIMER.md) first.
+> **Warning:** This agent performs real actions in the system you test. Use it only on systems you own or have written permission to test. Use an isolated test copy and synthetic data, never real customer data. I am not responsible for any misuse or any problem that comes from using it. Read the [DISCLAIMER](DISCLAIMER.md) first.
 
-## Why use it
+## What it does and does not promise
 
-Most test tools check what you told them to check. QA Explorer starts from what is actually on the screen.
+It does:
+- Explore the user facing parts it can reach, in order of risk
+- Keep a coverage ledger with one row per test, each with an action, an expected result, an observation and evidence
+- Verify bugs before it reports them, and list unconfirmed candidates separately
+- Clean up the test data it created, and prove it
+- Report what was not tested and why
 
-- **It acts like a human.** Real clicks, real typing, real navigation, in a real browser.
-- **It does not skip things.** It builds a site map and a coverage table of every page, control and state. A row only counts as tested when it has an action, a result and evidence.
-- **It is honest about gaps.** The report lists what was not tested and why. It never says "whole site tested" unless the table is full.
-- **It is careful.** It asks which environment it is testing before it changes anything, uses `QA-` prefixed test data, and cleans up after itself.
-- **It writes useful bugs.** Each bug has steps, expected result, actual result, how often it happens, severity (P0 to P3) and a screenshot or log.
+It does not:
+- Guarantee exhaustive coverage or bug free software. No finite run can
+- Find a fixed number of bugs. Zero bugs is a valid result
+- Replace specialists for penetration testing, load testing, formal accessibility conformance, API contract testing or broad cross device testing
+
+Results depend on the target, the accounts and roles you give it, the tools it has, how much evidence those tools can capture, and the time or action budget.
 
 ## What it tests
 
 | Area | Examples |
 |---|---|
-| Every page and control | Links, buttons, menus, tabs, modals, toggles, drag and drop, keyboard |
+| Pages and controls | Links, buttons, menus, tabs, dialogs, toggles, drag and drop, keyboard |
 | Data lifecycle | Create, read, edit, delete, search, sort, filter, upload, persistence after reload |
 | Forms | Empty, long, unicode, emoji, markup, boundaries, double submit |
-| Accounts | Signup, login, logout, reset, roles, direct URL access |
+| Accounts | Login and logout, roles and direct URL access (you sign in, it never types your password) |
 | Hidden failures | Console errors, failed and slow requests, silent save errors |
-| Screens | Phone to desktop widths, dark mode, zoom, orientation |
-| Accessibility | Keyboard only run, labels, focus, contrast (quick pass) |
-| When things go wrong | Offline, expired links, back button, two sessions, 404 pages |
+| Screens | Selected widths, dark mode, zoom, orientation |
+| Accessibility | Quick keyboard, label and contrast check (smoke level, not a conformance audit) |
+| When things go wrong | Offline, expired links, back button, 404 pages, two sessions |
 | Native iOS apps | Taps, swipes, permissions, interruptions in the iOS Simulator |
+
+## What tools it needs
+
+The agent works only as well as its tools. It checks what it has at the start of every run and reports it as available, partial or unavailable. It will not imply that it saw console logs, network calls or screenshots if the tools cannot capture them.
+
+Any one of these lets it drive an app:
+- Claude in Chrome (your real browser and signed in sessions)
+- The built in browser of the Claude desktop app
+- Playwright MCP, or Playwright scripts
+- The iOS Simulator tool, for native iOS apps
+
+If no tool can click and type, it says so and gives you a test plan instead.
 
 ## Install
 
-### Claude Code
+> Keep the warning above in mind. Start on a local or staging copy.
 
-Copy the agent and the skills into your Claude folder.
+### Claude Code
 
 ```bash
 git clone https://github.com/islambazlamit/qa-explorer-agent.git
@@ -47,89 +66,81 @@ cp agents/qa-explorer.md ~/.claude/agents/
 cp -R skills/* ~/.claude/skills/
 ```
 
-For one project only, use `.claude/agents/` and `.claude/skills/` inside that project instead.
+For one project only, use `.claude/agents/` and `.claude/skills/` inside that project.
 
 ### Other tools
 
-Paste the contents of [agents/qa-explorer.md](agents/qa-explorer.md) into the tool's agent or system prompt. The agent file already holds a short summary of every skill, so it works even when the tool cannot load skills.
-
-## What you need
-
-The agent must be able to drive a browser or a simulator. Any one of these works:
-
-- Claude in Chrome (uses your real browser and logged in sessions)
-- The built in browser of the Claude desktop app
-- Playwright MCP, or Playwright scripts
-- The iOS Simulator tool, for native iOS apps
-
-If no tool can click and type, the agent will say so and stop. It will not pretend.
+Paste [agents/qa-explorer.md](agents/qa-explorer.md) into the tool's agent or system prompt. The agent file holds the core rules, so it works even when the tool cannot load skills.
 
 ## Use it
 
-Start with the target and the rules. A few examples:
+> Safety first: tell the agent the environment, which accounts it may use, and what it must not touch. Use synthetic data. If you do not say, it treats the target as production and will only do read only checks and reversible actions on its own `QA-` test records.
+
+Examples:
 
 ```text
-Use the QA Explorer agent to test http://localhost:3000 end to end.
-This is my local dev copy, so you can create and delete data.
+Use the QA Explorer agent to test http://localhost:3000.
+This is my local dev copy with a test database, so it is fine to create and delete data.
 ```
 
 ```text
 Use QA Explorer on https://staging.example.com.
-Staging, test account: tester@example.com (I am already signed in).
-Do not publish or send anything that other people can see.
+Staging, I am already signed in as a test user.
+Do not publish or send anything other people can see. Budget: about 60 minutes.
 ```
 
 ```text
 Use QA Explorer to retest the checkout flow and confirm bugs 3, 5 and 7 are fixed.
 ```
 
-### What it does, in order
+### How a run goes
 
-1. **Safety gate.** Asks for the environment, accounts and what it may change.
-2. **Recon.** Maps every page, route and feature.
-3. **Coverage table.** Lists each page, control and state to test.
-4. **Execution.** Happy path first, then wrong inputs, odd navigation and edge cases.
-5. **Cross checks.** Console and network errors, screen sizes, accessibility, resilience.
-6. **Cleanup.** Deletes the test data it created and lists anything it could not remove.
-7. **Report.** Verdict, coverage numbers, bugs by severity, untested list, next steps.
+1. **Charter.** Environment, authorization, roles, allowed and prohibited actions, critical flows, budget.
+2. **Recon.** Maps the pages, routes and features it can reach, including pages missing from the menu.
+3. **Risk plan.** Ranks the checks and builds the coverage ledger.
+4. **Execution.** Happy path first, then wrong input, odd navigation and edge cases, with evidence for each result.
+5. **Signals.** Console, network, screen size and accessibility observations.
+6. **Verify.** Repeats each candidate bug when it is safe, and separates confirmed from unconfirmed.
+7. **Cleanup.** Removes what it created and checks that it worked.
+8. **Report.** Coverage numbers with numerators and denominators, bugs by severity, untested list, limits.
 
 ### Sign in
 
-The agent never types your password. Sign in yourself in the browser, then tell it you are ready. It will continue from your session.
+The agent never types your password. Sign in yourself in the browser, then tell it you are ready.
 
 ## The report
 
-You get a markdown report like this:
-
 ```text
-Verdict: SHIP WITH FIXES
-Coverage: 37 routes probed, 26 pages read, 3 full create/edit/delete flows
-Bugs: 2 P1, 5 P2, 6 P3
+Recommendation (provisional): SHIP WITH FIXES
+Scope: 37 routes probed, 26 pages read, 3 full create, edit and delete flows
+Coverage: 58 of 71 obligations executed (82 percent of the recorded scope, not of the whole product)
+Bugs: 2 P1, 5 P2, 6 P3 (4 more unconfirmed)
 Not tested: user creation (not allowed), payroll (no way to delete test data)
-Cleanup: 3 of 4 test records deleted, 1 leftover listed
+Cleanup: 3 of 4 test records deleted and verified, 1 leftover named
 ```
+
+The numbers above are an illustration of the format, not a benchmark.
 
 Each bug looks like this:
 
 ```text
-BUG-007 | P1 | Checkout
+BUG-007 | P1 | confidence: high | reproduced 2 of 2
 Title: Invalid promo code clears the cart total
-Steps: 1. Add an item. 2. Open checkout. 3. Enter ZZZ in promo and press Enter
+Steps: 1. Add an item. 2. Open checkout. 3. Enter ZZZ in promo and press Enter.
 Expected: Clear error, total unchanged
 Actual: Total shows 0.00 and no message
-Frequency: always (3 of 3)
 Evidence: shots/BUG-007-step3.png, console TypeError at promo.js:88
 ```
 
 ## Skills
 
-The agent loads these from the [skills](skills) folder. Each one is a small, focused guide.
+The agent loads these from the [skills](skills) folder. Each is a short, focused guide.
 
 | Skill | Use it for |
 |---|---|
 | `qa-safety-and-data-hygiene` | Environment gate, test data prefix, cleanup, hard stops |
 | `qa-recon-and-site-map` | Finding every page, route and feature |
-| `qa-coverage-matrix` | Tracking page, control and state until each has evidence |
+| `qa-coverage-matrix` | Tracking page, control and state until each has evidence or a reason |
 | `qa-human-interaction-sweep` | Touching every clickable and typeable thing |
 | `qa-crud-lifecycle` | Create, read, update, delete, search, sort, filter, upload |
 | `qa-form-and-input-validation` | Value classes, error messages, double submit |
@@ -143,27 +154,27 @@ The agent loads these from the [skills](skills) folder. Each one is a small, foc
 
 ## Built in safety rules
 
-- Asks for the environment (local, staging or production) before it changes anything.
-- Treats the target as production if you do not answer.
-- Checks where a local app really sends its data, mail and payments.
-- Uses `QA-` prefixed test data and keeps a cleanup list.
-- Never enters real payment details, never solves or bypasses CAPTCHAs, never types passwords.
+- Asks for the environment (local, staging or production) before it changes anything, and treats the target as production if you do not answer.
+- Checks where a local app really sends its data, mail and payments (names and hosts only, never secrets).
+- Uses `QA-` prefixed test data and keeps a cleanup list. Checks that a delete path exists before creating data.
+- Never enters real payment details, never solves or bypasses CAPTCHAs, never types passwords, never creates accounts.
 - Does not call unknown API, cron or webhook URLs just to see what happens.
-- Does not create accounts, send messages to real people, or publish to other users without your clear yes.
+- Does not send messages to real people or publish to other users without your clear yes.
 - If a tool blocks an action, it stops and asks you instead of finding a way around.
 
 These are instructions to an AI. They lower risk but cannot remove it. See the [DISCLAIMER](DISCLAIMER.md).
 
-## Limits
+## Is it any good? Validation
 
-- It tests what a browser or simulator can reach. It is not a load tester, a penetration test or a security audit.
-- It cannot test what it is not allowed to touch (real payments, account creation, messages to real people).
-- It can make mistakes. Check the evidence in the report before you act on it.
-- Coverage depends on the accounts and roles you give it. Use one account per role for full coverage.
+No benchmark results are published yet, and I will not claim any until they have been run. The [validation plan](docs/validation-plan.md) describes how to measure defect recall, precision, reproduction rate, unsupported claims, safety violations and cleanup success. A small practice app with seeded bugs and false positive traps is in [fixtures/buggy-notes](fixtures/buggy-notes) so you can run the plan yourself.
+
+## Changes
+
+See the [CHANGELOG](CHANGELOG.md). Every change that affects behavior should come with a regression scenario.
 
 ## Contributing
 
-Ideas and fixes are welcome. Open an issue or a pull request. Keep skills short, practical and written in plain words.
+Ideas and fixes are welcome. Open an issue or a pull request. Keep skills short, practical and in plain words. If you change behavior, add a line to the changelog and a scenario to the validation plan.
 
 ## Credits
 
